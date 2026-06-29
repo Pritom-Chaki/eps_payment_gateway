@@ -1,0 +1,32 @@
+name: eps_payment_gateway
+description: >-
+  Flutter package for EPS (Easy Payment System) payment gateway integration.
+  Supports sandbox and live environments with full-screen and modal bottom sheet
+  payment flows. Handles authentication, HMAC-SHA512 signing, and transaction
+  verification automatically.
+version: 1.0.0
+homepage: https://github.com/Pritom-Chaki/eps_payment_gateway
+repository: https://github.com/Pritom-Chaki/eps_payment_gateway
+issue_tracker: https://github.com/Pritom-Chaki/eps_payment_gateway/issues
+topics:
+  - payment
+  - payment-gateway
+  - eps
+  - bangladesh
+  - fintech
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.3
+  http: ^1.2.0
+  webview_flutter: ^4.10.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
