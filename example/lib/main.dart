@@ -6,15 +6,25 @@ void main() => runApp(const ExampleApp());
 // ---------------------------------------------------------------------------
 // EPS Gateway instance — created once, reused across the app.
 // Use EpsEnvironment.sandbox for testing, .live for production.
+// On Flutter web, set webAuthEndpoint to your backend proxy URL to avoid CORS.
 // ---------------------------------------------------------------------------
 final _eps = EpsPaymentGateway(
-  config: const EpsConfig(
-    merchantId: '29e86e70-0ac6-45eb-ba04-9fcb0aaed12a',
-    storeId: 'd44e705f-9e3a-41de-98b1-1674631637da',
-    hashKey: 'FHZxyzeps56789gfhg678ygu876o=',
-    userName: 'Epsdemo@gmail.com',
-    password: 'Epsdemo258@',
-    environment: EpsEnvironment.sandbox,
+  // config: const EpsConfig(
+  //   merchantId: '29e86e70-0ac6-45eb-ba04-9fcb0aaed12a',
+  //   storeId: 'd44e705f-9e3a-41de-98b1-1674631637da',
+  //   hashKey: 'FHZxyzeps56789gfhg678ygu876o=',
+  //   userName: 'Epsdemo@gmail.com',
+  //   password: 'Epsdemo258@',
+  //   environment: EpsEnvironment.sandbox,
+  //   //webAuthEndpoint: 'https://your-proxy.com/api', // Required on Flutter web
+  // ),
+  config: EpsConfig(
+    merchantId: 'a7ce3f39-10a7-490a-98d7-3ce6418e06ff',
+    storeId: 'A845021F-EC6E-419A-83A1-C54780DE7089',
+    hashKey: 'FMUNISHOY2lWZEPSXTy4FE22PIXSTORE',
+    userName: 'rabbyapk@gmail.com',
+    password: 'Pixstore8@',
+    environment: EpsEnvironment.live,
   ),
 );
 
@@ -132,7 +142,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ),
                     )
                   : const Icon(Icons.payment),
-              label: Text(_loading ? 'Processing…' : 'Pay BDT ${_order.amount.toStringAsFixed(2)}'),
+              label: Text(_loading
+                  ? 'Processing…'
+                  : 'Pay BDT ${_order.amount.toStringAsFixed(2)}'),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
@@ -195,9 +207,7 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = bold
-        ? const TextStyle(fontWeight: FontWeight.bold)
-        : null;
+    final style = bold ? const TextStyle(fontWeight: FontWeight.bold) : null;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -269,7 +279,7 @@ class _ResultCard extends StatelessWidget {
     };
 
     return Card(
-      color: color.withOpacity(0.1),
+                      color: color.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

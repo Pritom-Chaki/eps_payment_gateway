@@ -27,8 +27,12 @@ class EpsApiService {
 
     final body = jsonEncode(_buildPayload(order, merchantTransactionId));
 
+    final baseUrl = kIsWeb && _config.webAuthEndpoint != null
+        ? _config.webAuthEndpoint!
+        : _config.baseUrl;
+
     final response = await http.post(
-      Uri.parse('${_config.baseUrl}/v1/EPSEngine/InitializeEPS'),
+      Uri.parse('$baseUrl/v1/EPSEngine/InitializeEPS'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -64,9 +68,13 @@ class EpsApiService {
   }) async {
     final hash = computeEpsHash(_config.hashKey, merchantTransactionId);
 
+    final baseUrl = kIsWeb && _config.webAuthEndpoint != null
+        ? _config.webAuthEndpoint!
+        : _config.baseUrl;
+
     final response = await http.get(
       Uri.parse(
-        '${_config.baseUrl}/v1/EPSEngine/CheckMerchantTransactionStatus'
+        '$baseUrl/v1/EPSEngine/CheckMerchantTransactionStatus'
         '?merchantTransactionId=$merchantTransactionId',
       ),
       headers: {

@@ -1,24 +1,47 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'api/backend_service.dart';
 import 'config/eps_config.dart';
 import 'config/eps_display_mode.dart';
+import 'enums/payment_mode.dart';
 import 'internal/eps_callback_urls.dart';
 import 'models/eps_order.dart';
 import 'models/eps_payment_result.dart';
 import 'models/eps_transaction_status.dart';
+import 'models/payment_result.dart';
 import 'services/eps_api_service.dart';
 import 'services/eps_auth_service.dart';
+import 'utils/exceptions.dart';
 import 'widgets/eps_payment_webview.dart';
 
 /// Entry point for EPS payment gateway integration.
 ///
-/// Instantiate once with your [EpsConfig] and call [pay] from any widget.
+/// Supports two modes:
+/// - [EPSMode.direct] — Flutter calls the EPS InitializeEPS API directly
+///   using merchant credentials (the original flow).
+/// - [EPSMode.server] — Flutter calls a backend endpoint which proxies
+///   the request to EPS. The backend returns a `redirect_url` that the
+///   package opens in a WebView.
+///
+/// ## Direct mode (existing API)
 ///
 /// ```dart
 /// final eps = EpsPaymentGateway(config: EpsConfig(...));
+/// final result = await eps.pay(context: context, order: EpsOrder(...));
+/// ```
 ///
-/// final result = await eps.pay(
-///   context: context,
-///   order: EpsOrder(...),
+/// ## Server mode (new API)
+///
+/// ```dart
+/// final result = await EpsPaymentGateway.startPayment(
+///   mode: EPSMode.server,
+///   initUrl: 'https://pixposbd.com/api/eps/init',
+///   requestBody: {
+///     'invoice_no': 'INV-001',
+///     'amount': 500,
+///     'customer_name': 'Rahim Uddin',
+///     'customer_phone': '01712345678',
+///   },
 /// );
 /// ```
 class EpsPaymentGateway {
@@ -31,11 +54,80 @@ class EpsPaymentGateway {
   final EpsAuthService _auth;
   final EpsApiService _api;
 
-  // ── Public ────────────────────────────────────────────────────────────
+  // ── Public (Direct Mode — static convenience) ──────────────────────────
+
+  /// Convenience static method for **server mode**.
+  ///
+  /// Call this from anywhere without instantiating [EpsPaymentGateway].
+  ///
+  /// ```dart
+  /// final result = await EpsPaymentGateway.startPayment(
+  ///   mode: EPSMode.server,
+  ///   initUrl: 'https://pixposbd.com/api/eps/init',
+  ///   requestBody: { ... },
+  /// );
+  /// ```
+  static Future<PaymentResult> startPayment({
+    required BuildContext context,
+    EPSMode mode = EPSMode.server,
+    required String initUrl,
+    required Map<String, dynamic> requestBody,
+    EpsDisplayMode displayMode = EpsDisplayMode.fullScreen,
+  }) async {
+    final backend = BackendService();
+    final initUri = Uri.parse(initUrl);
+
+    try {
+      // 1. Call backend to get redirect URL.
+      final redirectUrl = await backend.initialize(
+        initUrl: initUri,
+        requestBody: requestBody,
+      );
+
+      if (!context.mounted) {
+        return const PaymentResult(
+          status: PaymentStatus.cancelled,
+          message: 'Context is no longer mounted.',
+        );
+      }
+
+      // 2. Present payment page and wait for callback.
+      final callbackUrl = displayMode == EpsDisplayMode.fullScreen
+          ? await _pushFullScreen(context, redirectUrl)
+          : await _showBottomSheet(context, redirectUrl);
+
+      // 3. Interpret callback.
+      if (callbackUrl == null) {
+        return const PaymentResult(
+          status: PaymentStatus.cancelled,
+          message: 'User closed the payment page.',
+        );
+      }
+
+      return _resultFromCallback(callbackUrl);
+    } on InvalidParameterException catch (e) {
+      return PaymentResult(
+        status: PaymentStatus.cancelled,
+        message: e.message,
+      );
+    } on BackendException catch (e) {
+      return PaymentResult(
+        status: PaymentStatus.cancelled,
+        message: e.message,
+      );
+    } catch (e) {
+      return PaymentResult(
+        status: PaymentStatus.cancelled,
+        message: e.toString(),
+      );
+    }
+  }
+
+  // ── Public (Direct Mode — instance API) ────────────────────────────────
 
   /// Launches the EPS payment flow and returns the final [EpsPaymentResult].
   ///
-  /// Internally this method:
+  /// This method:
   /// 1. Obtains a JWT from EPS.
   /// 2. Initialises the transaction and receives a redirect URL.
   /// 3. Presents the EPS payment page (full-screen or modal bottom sheet).
@@ -48,6 +140,14 @@ class EpsPaymentGateway {
     required EpsOrder order,
     EpsDisplayMode mode = EpsDisplayMode.fullScreen,
   }) async {
+    if (kIsWeb && _config.webAuthEndpoint == null) {
+      return const EpsPaymentResult(
+        status: EpsPaymentStatus.error,
+        errorMessage:
+            'Web mode requires a same-origin proxy endpoint because EPS does not permit browser-side HTTP requests. Set EpsConfig.webAuthEndpoint to your backend proxy URL.',
+      );
+    }
+
     try {
       // 1. Authenticate.
       final token = await _auth.getToken();
@@ -111,7 +211,7 @@ class EpsPaymentGateway {
 
   // ── Navigation helpers ────────────────────────────────────────────────
 
-  Future<String?> _pushFullScreen(
+  static Future<String?> _pushFullScreen(
     BuildContext context,
     String redirectUrl,
   ) =>
@@ -121,7 +221,7 @@ class EpsPaymentGateway {
         ),
       );
 
-  Future<String?> _showBottomSheet(
+  static Future<String?> _showBottomSheet(
     BuildContext context,
     String redirectUrl,
   ) =>
@@ -129,12 +229,35 @@ class EpsPaymentGateway {
         context: context,
         isScrollControlled: true,
         isDismissible: true,
+        enableDrag: false,
+        showDragHandle: true,
         useSafeArea: true,
         backgroundColor: Colors.transparent,
         builder: (_) => _EpsPaymentSheet(redirectUrl: redirectUrl),
       );
 
-  // ── Result builder ────────────────────────────────────────────────────
+  // ── Result helpers ─────────────────────────────────────────────────────
+
+  static PaymentResult _resultFromCallback(String url) {
+    if (url.startsWith('https://pixposbd.com/payment/success') ||
+        url.startsWith(kEpsSuccessCallbackUrl)) {
+      return const PaymentResult(
+        status: PaymentStatus.success,
+        message: 'Payment successful.',
+      );
+    }
+    if (url.startsWith('https://pixposbd.com/payment/cancel') ||
+        url.startsWith(kEpsCancelCallbackUrl)) {
+      return const PaymentResult(
+        status: PaymentStatus.cancelled,
+        message: 'Payment cancelled by user.',
+      );
+    }
+    return const PaymentResult(
+      status: PaymentStatus.failed,
+      message: 'Payment failed.',
+    );
+  }
 
   EpsPaymentResult _buildResult(
     String txnId,
@@ -157,7 +280,7 @@ class EpsPaymentGateway {
   }
 }
 
-// ── Private UI ────────────────────────────────────────────────────────────────
+// ── Private UI ───────────────────────────────────────────────────────────────
 
 /// Full-screen Scaffold wrapping [EpsPaymentWebView].
 class _EpsPaymentPage extends StatelessWidget {
@@ -238,7 +361,7 @@ class _SheetHandle extends StatelessWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: colorScheme.onSurfaceVariant.withOpacity(0.4),
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

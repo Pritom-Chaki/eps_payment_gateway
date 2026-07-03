@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/eps_config.dart';
 import 'eps_hash_service.dart';
@@ -17,8 +18,12 @@ class EpsAuthService {
   Future<String> getToken() async {
     final hash = computeEpsHash(_config.hashKey, _config.userName);
 
+    final baseUrl = kIsWeb && _config.webAuthEndpoint != null
+        ? _config.webAuthEndpoint!
+        : _config.baseUrl;
+
     final response = await http.post(
-      Uri.parse('${_config.baseUrl}/v1/Auth/GetToken'),
+      Uri.parse('$baseUrl/v1/Auth/GetToken'),
       headers: {
         'Content-Type': 'application/json',
         'x-hash': hash,

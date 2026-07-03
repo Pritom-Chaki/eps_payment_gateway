@@ -3,7 +3,7 @@ enum EpsEnvironment {
   /// Sandbox / testing environment — `sandboxpgapi.eps.com.bd`.
   sandbox,
 
-  /// Production / live environment — `pgapi.eps.com.bd`.
+  /// Production / live environment — `pixposbd.com`.
   live,
 }
 
@@ -16,6 +16,7 @@ class EpsConfig {
     required this.userName,
     required this.password,
     this.environment = EpsEnvironment.live,
+    this.webAuthEndpoint,
   });
 
   final String merchantId;
@@ -27,6 +28,11 @@ class EpsConfig {
   final String userName;
   final String password;
   final EpsEnvironment environment;
+
+  /// On web, all EPS API calls are forwarded to this proxy endpoint instead of
+  /// being called directly (to avoid CORS restrictions).
+  /// Required when running on Flutter web; ignored on mobile.
+  final String? webAuthEndpoint;
 
   String get baseUrl => environment == EpsEnvironment.sandbox
       ? 'https://sandboxpgapi.eps.com.bd'
