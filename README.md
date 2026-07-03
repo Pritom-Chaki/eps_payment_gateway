@@ -26,7 +26,7 @@ A Flutter package for integrating the **EPS (Easy Payment System)** payment gate
 
 ```yaml
 dependencies:
-  eps_payment_gateway: ^1.0.0
+  eps_payment_gateway: ^1.0.1
 ```
 
 ### Android
